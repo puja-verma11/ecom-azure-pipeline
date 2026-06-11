@@ -10,7 +10,7 @@ STORAGE_ACCOUNT_NAME = "ecompipelinelakepuja"
 STORAGE_ACCOUNT_KEY  = dbutils.secrets.get(scope="ecom-secrets", key="storage-account-key")
 
 spark.conf.set(
-    f"fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net",
+    f"spark.hadoop.fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net",
     STORAGE_ACCOUNT_KEY
 )
 
