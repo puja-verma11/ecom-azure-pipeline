@@ -21,7 +21,7 @@ print("✅ ADLS connection configured")
 # COMMAND ----------
 # Cell 2 — Add repo root to path so we can import quality checks
 import sys
-sys.path.insert(0, "/Workspace/Repos/pujavrma.11@gmail.com/ecom-azure-pipeline")
+sys.path.insert(0, "/Workspace/Users/pujavrma.11@gmail.com/ecom-azure-pipeline")
 
 from quality.bronze_checks import run_bronze_checks
 
