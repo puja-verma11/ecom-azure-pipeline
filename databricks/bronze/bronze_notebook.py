@@ -1,25 +1,52 @@
 # Databricks notebook source
 
 # COMMAND ----------
-# Cell 1 — ADLS Configuration
-# Credentials are read from Cluster Environment Variables (set once in cluster config)
-# Never stored in code or GitHub ✅
-# Cell 1 — ADLS Configuration
-# Credentials read from Databricks Secrets — never stored in code or GitHub ✅
-STORAGE_ACCOUNT_NAME = "ecompipelinelakepuja"
-STORAGE_ACCOUNT_KEY  = dbutils.secrets.get(scope="ecom-secrets", key="storage-account-key")
-
-spark.conf.set(
-    f"spark.hadoop.fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net",
-    STORAGE_ACCOUNT_KEY
-)
-
-LANDING_PATH = f"abfss://landing@{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net"
-
-print("✅ ADLS connection configured")
+# Cell 1 — Install Azure Storage SDK
+# Bypasses Spark Connect restriction — no spark.conf.set needed ✅
+%pip install azure-storage-blob
 
 # COMMAND ----------
-# Cell 2 — Add repo root to path so we can import quality checks
+# Cell 2 — ADLS Configuration via Azure Python SDK
+import io
+import pandas as pd
+from azure.storage.blob import BlobServiceClient
+
+STORAGE_ACCOUNT_NAME = "ecompipelinelakepuja"
+CONTAINER_NAME       = "landing"
+STORAGE_ACCOUNT_KEY  = dbutils.secrets.get(scope="ecom-secrets", key="storage-account-key")
+
+# Connect using Azure SDK (not Spark ADLS connector)
+blob_service_client = BlobServiceClient(
+    account_url  = f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net",
+    credential   = STORAGE_ACCOUNT_KEY
+)
+container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+
+print("✅ ADLS connection configured via Azure SDK")
+
+# COMMAND ----------
+# Cell 3 — Helper function to read all parquet files from a folder in ADLS
+def read_table_from_adls(table_name: str) -> pd.DataFrame:
+    """Read all parquet files from landing/<table_name>/ and return as pandas DataFrame"""
+    blobs = list(container_client.list_blobs(name_starts_with=f"{table_name}/"))
+
+    if not blobs:
+        print(f"   ⚠️  No files found for {table_name}")
+        return pd.DataFrame()
+
+    dfs = []
+    for blob in blobs:
+        blob_client = container_client.get_blob_client(blob.name)
+        blob_data   = blob_client.download_blob().readall()
+        df          = pd.read_parquet(io.BytesIO(blob_data))
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+print("✅ Helper function defined")
+
+# COMMAND ----------
+# Cell 4 — Add repo root to path so we can import quality checks
 import sys
 sys.path.insert(0, "/Workspace/Users/pujavrma.11@gmail.com/ecom-azure-pipeline")
 
@@ -28,13 +55,13 @@ from quality.bronze_checks import run_bronze_checks
 print("✅ Bronze quality checks imported")
 
 # COMMAND ----------
-# Cell 3 — Create Bronze database
+# Cell 5 — Create Bronze database
 spark.sql("CREATE DATABASE IF NOT EXISTS bronze")
 
 print("✅ Bronze database ready")
 
 # COMMAND ----------
-# Cell 4 — Define table configs (which column is the ID, which columns are the key)
+# Cell 6 — Define table configs
 TABLE_CONFIGS = {
     "customers":   {"id_col": "customer_id",    "key_cols": ["customer_id"]},
     "categories":  {"id_col": "category_id",    "key_cols": ["category_id"]},
@@ -46,16 +73,15 @@ TABLE_CONFIGS = {
 print("✅ Table configs defined")
 
 # COMMAND ----------
-# Cell 5 — Process each table through bronze quality checks
+# Cell 7 — Process each table through bronze quality checks
 all_quarantine = []
 
 for table_name, config in TABLE_CONFIGS.items():
     print(f"\n⏳ Processing {table_name}...")
 
-    # Read parquet files from ADLS landing zone
-    df_spark  = spark.read.parquet(f"{LANDING_PATH}/{table_name}/")
-    df_pandas = df_spark.toPandas()
-    print(f"  Read {len(df_pandas)} rows from landing")
+    # Read parquet from ADLS via Azure SDK → pandas (no spark.conf.set needed!)
+    df_pandas = read_table_from_adls(table_name)
+    print(f"   📥 Read {len(df_pandas)} rows from landing")
 
     # Run bronze quality checks (null ID + deduplication)
     good_df, bad_df = run_bronze_checks(
@@ -67,7 +93,7 @@ for table_name, config in TABLE_CONFIGS.items():
     print(f"   ✅ Good rows : {len(good_df)}")
     print(f"   ❌ Bad rows  : {len(bad_df)}")
 
-    # Write good data to Bronze Delta table
+    # Convert pandas → Spark → write as Delta table
     spark.createDataFrame(good_df) \
         .write \
         .format("delta") \
@@ -75,14 +101,11 @@ for table_name, config in TABLE_CONFIGS.items():
         .saveAsTable(f"bronze.{table_name}")
     print(f"   💾 Saved → bronze.{table_name}")
 
-    # Collect bad rows for quarantine
     if len(bad_df) > 0:
         all_quarantine.append(bad_df)
 
 # COMMAND ----------
-# Cell 6 — Write quarantine table
-import pandas as pd
-
+# Cell 8 — Write quarantine table
 if all_quarantine:
     quarantine_df = pd.concat(all_quarantine, ignore_index=True)
     spark.createDataFrame(quarantine_df) \
@@ -90,12 +113,12 @@ if all_quarantine:
         .format("delta") \
         .mode("append") \
         .saveAsTable("bronze.quarantine")
-    print(f"\n  {len(quarantine_df)} bad rows written to bronze.quarantine")
+    print(f"\n⚠️  {len(quarantine_df)} bad rows written to bronze.quarantine")
 else:
-    print("\n No bad rows found — nothing quarantined")
+    print("\n✅ No bad rows found — nothing quarantined")
 
 # COMMAND ----------
-# Cell 7 — Verify Bronze layer counts
+# Cell 9 — Verify Bronze layer counts
 print("\n📊 Bronze Layer Summary:")
 for table_name in TABLE_CONFIGS:
     count = spark.sql(f"SELECT COUNT(*) as cnt FROM bronze.{table_name}").collect()[0]["cnt"]
