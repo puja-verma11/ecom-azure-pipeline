@@ -88,7 +88,7 @@ print("Table configs defined")
 
 # COMMAND ----------
 # Cell 8 — Process each table through bronze quality checks
-all_quarantine = []
+# Quarantine written per-table to avoid mixed schema issue ✅
 
 for table_name, config in TABLE_CONFIGS.items():
     print(f"\nProcessing {table_name}...")
@@ -109,29 +109,25 @@ for table_name, config in TABLE_CONFIGS.items():
     print(f"   Good rows : {len(good_df)}")
     print(f"   Bad rows  : {len(bad_df)}")
 
+    # Write good rows to Bronze Delta table
     if not good_df.empty:
         spark.createDataFrame(good_df) \
             .write \
             .format("delta") \
             .mode("overwrite") \
+            .option("overwriteSchema", "true") \
             .saveAsTable(f"bronze.{table_name}")
         print(f"   Saved -> bronze.{table_name}")
 
-    if len(bad_df) > 0:
-        all_quarantine.append(bad_df)
-
-# COMMAND ----------
-# Cell 9 — Write quarantine table
-if all_quarantine:
-    quarantine_df = pd.concat(all_quarantine, ignore_index=True)
-    spark.createDataFrame(quarantine_df) \
-        .write \
-        .format("delta") \
-        .mode("append") \
-        .saveAsTable("bronze.quarantine")
-    print(f"{len(quarantine_df)} bad rows written to bronze.quarantine")
-else:
-    print("No bad rows found — nothing quarantined")
+    # Write bad rows to quarantine immediately (per table — avoids mixed schema!) ✅
+    if not bad_df.empty:
+        spark.createDataFrame(bad_df) \
+            .write \
+            .format("delta") \
+            .mode("append") \
+            .option("mergeSchema", "true") \
+            .saveAsTable("bronze.quarantine")
+        print(f"   {len(bad_df)} bad rows -> bronze.quarantine")
 
 # COMMAND ----------
 # Cell 10 — Verify Bronze layer counts
