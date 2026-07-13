@@ -11,6 +11,10 @@ print("Silver quality checks imported")
 # COMMAND ----------
 # Cell 2 — Create Silver database
 spark.sql("CREATE DATABASE IF NOT EXISTS silver")
+
+# Drop quarantine so we don't accumulate duplicates across runs
+spark.sql("DROP TABLE IF EXISTS silver.quarantine")
+
 print("Silver database ready")
 
 # COMMAND ----------
@@ -43,7 +47,7 @@ TABLE_CONFIGS = {
     },
 }
 
-# COMMAND ----------
+
 # Cell 4 — Load reference tables from Bronze (needed for referential integrity)
 ref_dfs = {}
 for ref_table in ["customers", "orders"]:
