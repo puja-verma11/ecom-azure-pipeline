@@ -1,0 +1,34 @@
+name: CI — Data Quality Tests
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas pytest pytest-cov pyarrow
+
+      - name: Run Bronze unit tests
+        run: pytest tests/unit/test_bronze_checks.py -v
+
+      - name: Run Silver unit tests
+        run: pytest tests/unit/test_silver_checks.py -v
+
+      - name: Run all tests with coverage
+        run: |
+          pytest tests/unit/ -v --cov=quality --cov-report=term-missing
