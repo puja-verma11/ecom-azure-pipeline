@@ -1,7 +1,6 @@
 # Databricks notebook source
 
-# COMMAND ----------
-# Cell 1 — Create Gold database and reset tables
+ # Cell 1 — Create Gold database and reset tables
 spark.sql("CREATE DATABASE IF NOT EXISTS gold")
 spark.sql("DROP TABLE IF EXISTS gold.customer_revenue")
 spark.sql("DROP TABLE IF EXISTS gold.product_sales")
@@ -10,8 +9,7 @@ spark.sql("DROP TABLE IF EXISTS gold.orders_by_status")
 spark.sql("DROP TABLE IF EXISTS gold.category_performance")
 print("Gold database ready")
 
-# COMMAND ----------
-# Cell 2 — Revenue per customer
+ # Cell 2 — Revenue per customer
 spark.sql("""
     CREATE OR REPLACE TABLE gold.customer_revenue AS
     SELECT
@@ -32,8 +30,7 @@ spark.sql("""
 """)
 print("gold.customer_revenue done")
 
-# COMMAND ----------
-# Cell 3 — Sales per product
+ # Cell 3 — Sales per product
 spark.sql("""
     CREATE OR REPLACE TABLE gold.product_sales AS
     SELECT
@@ -50,8 +47,7 @@ spark.sql("""
 """)
 print("gold.product_sales done")
 
-# COMMAND ----------
-# Cell 4 — Daily revenue
+ # Cell 4 — Daily revenue
 spark.sql("""
     CREATE OR REPLACE TABLE gold.daily_revenue AS
     SELECT
@@ -65,8 +61,7 @@ spark.sql("""
 """)
 print("gold.daily_revenue done")
 
-# COMMAND ----------
-# Cell 5 — Orders by status
+ # Cell 5 — Orders by status
 spark.sql("""
     CREATE OR REPLACE TABLE gold.orders_by_status AS
     SELECT
@@ -80,8 +75,7 @@ spark.sql("""
 """)
 print("gold.orders_by_status done")
 
-# COMMAND ----------
-# Cell 6 — Category performance
+ # Cell 6 — Category performance
 spark.sql("""
     CREATE OR REPLACE TABLE gold.category_performance AS
     SELECT
@@ -98,8 +92,7 @@ spark.sql("""
 """)
 print("gold.category_performance done")
 
-# COMMAND ----------
-# Cell 7 — Verify Gold layer
+ # Cell 7 — Verify Gold layer
 print("Gold Layer Summary:")
 for table in ["customer_revenue", "product_sales", "daily_revenue",
               "orders_by_status", "category_performance"]:
